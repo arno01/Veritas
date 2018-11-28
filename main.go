@@ -1,17 +1,18 @@
 package main
 
 import (
+  "bufio"
   "crypto/sha256"
   "encoding/hex"
   "encoding/json"
   "io"
   "log"
-  "net/http"
+  "net"
   "os"
+  "strconv"
   "time"
 
   "github.com/davecgh/go-spew/spew"
-	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 )
 
@@ -23,11 +24,7 @@ type Block struct {
   Prevhash string
 }
 
-type Message struct {
-  Val int
-}
-
-
+var bcServer chan []Block
 var Blockchain []Block
 
 func main() {
@@ -35,13 +32,67 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	bcServer = make(chan []Block)
+  t := time.Now()
+  block_0 := Block{0, t.String(), 0, "",""}
+  spew.Dump(block_0)
+	Blockchain = append(Blockchain, block_0)
+  //start TCP
+  server, err := net.Listen("tcp", ":"+os.Getenv("ADDR"))
+  if err != nil {
+    log.Fatal(err)
+  }
+  defer server.Close()
+  for {
+		conn, err := server.Accept()
+		if err != nil {
+			log.Fatal(err)
+		}
+		go handleConn(conn)
+	}
+}
+
+func handleConn(conn net.Conn) {
+	defer conn.Close()
+  io.WriteString(conn, "Enter a new value:")
+  scanner := bufio.NewScanner(conn)
+  // add val to blockchain
+  go func() {
+  	for scanner.Scan() {
+  		val, err := strconv.Atoi(scanner.Text())
+  		if err != nil {
+  			log.Printf("%v not a number: %v", scanner.Text(), err)
+  			continue
+  		}
+  		newBlock, err := generateBlock(Blockchain[len(Blockchain)-1], val)
+  		if err != nil {
+  			log.Println(err)
+  			continue
+  		}
+  		if isBlockValid(newBlock, Blockchain[len(Blockchain)-1]) {
+  			newBlockchain := append(Blockchain, newBlock)
+  			replaceChain(newBlockchain)
+  		}
+
+  		bcServer <- Blockchain
+  		io.WriteString(conn, "\nEnter a new value:")
+  	}
+  }()
+  // simulate receiving broadcast
 	go func() {
-		t := time.Now()
-		genesisBlock := Block{0, t.String(), 0, "", ""}
-		spew.Dump(genesisBlock)
-		Blockchain = append(Blockchain, genesisBlock)
+		for {
+			time.Sleep(30 * time.Second)
+			output, err := json.Marshal(Blockchain)
+			if err != nil {
+				log.Fatal(err)
+			}
+			io.WriteString(conn, string(output))
+		}
 	}()
-	log.Fatal(run())
+
+	for _ = range bcServer {
+		spew.Dump(Blockchain)
+	}
 }
 
 func calculateHash(block Block) string {
@@ -79,71 +130,4 @@ func replaceChain(newBlocks []Block){
   if len(newBlocks) > len(Blockchain){
     Blockchain = newBlocks
   }
-}
-
-func run() error{
-  mux := makeMuxRouter()
-  httpAddr := os.Getenv("ADDR")
-	log.Println("Listening on ", os.Getenv("ADDR"))
-	s := &http.Server{
-		Addr:           ":" + httpAddr,
-		Handler:        mux,
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
-		MaxHeaderBytes: 1 << 20,
-	}
-	if err := s.ListenAndServe(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func makeMuxRouter() http.Handler {
-	muxRouter := mux.NewRouter()
-	muxRouter.HandleFunc("/", handleGetBlockchain).Methods("GET")
-	muxRouter.HandleFunc("/", handleWriteBlock).Methods("POST")
-	return muxRouter
-}
-
-
-func handleGetBlockchain(w http.ResponseWriter, r *http.Request) {
-	bytes, err := json.MarshalIndent(Blockchain, "", "  ")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	io.WriteString(w, string(bytes))
-}
-
-
-func handleWriteBlock(w http.ResponseWriter, r *http.Request) {
-	var m Message
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&m); err != nil {
-		respondWithJSON(w, r, http.StatusBadRequest, r.Body)
-		return
-	}
-	defer r.Body.Close()
-	newBlock, err := generateBlock(Blockchain[len(Blockchain)-1], m.Val)
-	if err != nil {
-		respondWithJSON(w, r, http.StatusInternalServerError, m)
-		return
-	}
-	if isBlockValid(newBlock, Blockchain[len(Blockchain)-1]) {
-		newBlockchain := append(Blockchain, newBlock)
-		replaceChain(newBlockchain)
-		spew.Dump(Blockchain)
-	}
-	respondWithJSON(w, r, http.StatusCreated, newBlock)
-}
-
-func respondWithJSON(w http.ResponseWriter, r *http.Request, code int, payload interface{}) {
-	response, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("HTTP 500: Internal Server Error"))
-		return
-	}
-	w.WriteHeader(code)
-	w.Write(response)
 }
