@@ -3,40 +3,41 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
-	"strconv"
 	"time"
   "encoding/gob"
 )
 
 type Block struct {
 	Timestamp int64
-	Data      []byte
+	Transactions []*Transaction
 	PrevHash  []byte
 	Hash      []byte
 	Nonce    int
 }
 
-func (b *Block) SetHash() {
-	timestamp := []byte(strconv.FormatInt(b.Timestamp, 10))
-	headers := bytes.Join([][]byte{b.PrevHash, b.Data, timestamp}, []byte{})
-	hash := sha256.Sum256(headers)
-	b.Hash = hash[:]
-}
-
-func NewBlock(data string, prevBlockHash []byte) *Block {
+func NewBlock(transactions []*Transaction, prevHash []byte) *Block {
 	timestamp := time.Now().Unix()
-	block := &Block{timestamp, []byte(data), prevBlockHash, []byte{}, 0}
+	block := &Block{timestamp, transactions, prevHash, []byte{}, 0}
 	pow := NewProofOfWork(block)
 	nonce, hash := pow.Run()
-
 	block.Hash = hash[:]
 	block.Nonce = nonce
-
 	return block
 }
 
-func NewGenesisBlock() *Block {
-	return NewBlock("Genesis Block", []byte{})
+func NewGenesisBlock(base *Transaction) *Block {
+	return NewBlock([]*Transaction{base}, []byte{})
+}
+
+//all transactions in a block identified by a single hash
+func (b *Block) HashTransactions() []byte {
+  var txHashes [][]byte
+  var txHash [32]byte
+  for _,tx := range b.Transactions{
+    txHashes = append(txHashes, tx.ID)
+  }
+  txHash = sha256.Sum256(bytes.Join(txHashes,[]byte{}))
+  return txHash[:]
 }
 
 func (b *Block) Serialize() []byte {
