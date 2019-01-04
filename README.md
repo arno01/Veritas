@@ -1,6 +1,6 @@
 # Veritas
 
-A basic blockchain written in Golang. Commands are given through arguments while running the binary.
+A basic, centralized blockchain written in Golang. Commands are given through arguments while running the binary.
 
 COMMANDS:
 
