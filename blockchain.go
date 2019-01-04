@@ -68,13 +68,10 @@ func (bc *Blockchain) FindUnspentTransactions(pubKeyHash []byte) []Transaction {
 	var unspentTXs []Transaction
 	spentTXOs := make(map[string][]int)
 	bci := bc.Iterator()
-
 	for {
 		block := bci.Next()
-
 		for _, tx := range block.Transactions {
 			txID := hex.EncodeToString(tx.ID)
-
 		Outputs:
 			for outIdx, out := range tx.Vout {
 				// Was the output spent?
@@ -85,12 +82,10 @@ func (bc *Blockchain) FindUnspentTransactions(pubKeyHash []byte) []Transaction {
 						}
 					}
 				}
-
 				if out.IsLockedWithKey(pubKeyHash) {
 					unspentTXs = append(unspentTXs, *tx)
 				}
 			}
-
 			if tx.IsCoinbase() == false {
 				for _, in := range tx.Vin {
 					if in.UsesKey(pubKeyHash) {
@@ -100,12 +95,10 @@ func (bc *Blockchain) FindUnspentTransactions(pubKeyHash []byte) []Transaction {
 				}
 			}
 		}
-
 		if len(block.PrevHash) == 0 {
 			break
 		}
 	}
-
 	return unspentTXs
 }
 
@@ -177,7 +170,6 @@ func (bc *Blockchain) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, 
 	unspentOutputs := make(map[string][]int)
 	unspentTXs := bc.FindUnspentTransactions(pubKeyHash)
 	accumulated := 0
-
 Work:
 	for _, tx := range unspentTXs {
 		txID := hex.EncodeToString(tx.ID)
@@ -193,7 +185,6 @@ Work:
 			}
 		}
 	}
-
 	return accumulated, unspentOutputs
 }
 
@@ -216,7 +207,6 @@ func (i *BlockchainIterator) Next() *Block {
 
 func (bc *Blockchain) SignTransaction(tx *Transaction, privKey ecdsa.PrivateKey) {
 	prevTXs := make(map[string]Transaction)
-
 	for _, vin := range tx.Vin {
 		prevTX, err := bc.FindTransaction(vin.Txid)
 		if err != nil {
@@ -224,27 +214,22 @@ func (bc *Blockchain) SignTransaction(tx *Transaction, privKey ecdsa.PrivateKey)
 		}
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
 	}
-
 	tx.Sign(privKey, prevTXs)
 }
 
 // FindTransaction finds a transaction by its ID
 func (bc *Blockchain) FindTransaction(ID []byte) (Transaction, error) {
 	bci := bc.Iterator()
-
 	for {
 		block := bci.Next()
-
 		for _, tx := range block.Transactions {
 			if bytes.Compare(tx.ID, ID) == 0 {
 				return *tx, nil
 			}
 		}
-
 		if len(block.PrevHash) == 0 {
 			break
 		}
 	}
-
 	return Transaction{}, errors.New("Transaction is not found")
 }

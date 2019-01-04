@@ -4,21 +4,22 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
-  "math"
+	"math"
 	"math/big"
 )
 
-var(
-  maxNonce = math.MaxInt64
+var (
+	maxNonce = math.MaxInt64
 )
 
 //mining difficulty
-const targetBits = 18
+const targetBits = 24
 
 type ProofOfWork struct {
 	block  *Block
 	target *big.Int
 }
+
 // target is one 256 bit shifted (targetBits) values to the right
 // POW must generate a hash under this value. Increasing targetBits increases difficulty
 func NewProofOfWork(b *Block) *ProofOfWork {
@@ -46,7 +47,7 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 	var hashInt big.Int
 	var hash [32]byte
 	nonce := 0
-	fmt.Printf("--> mining the block \"%s\"\n", string(pow.block.Hash))
+	fmt.Printf("--> mining a new block...")
 	for nonce < maxNonce {
 		data := pow.prepareData(nonce)
 		hash = sha256.Sum256(data)
